@@ -5,7 +5,8 @@ from PyQt6.QtWidgets import (
     QToolBar, QLabel, QSpinBox, QSlider, QCheckBox,
     QFileDialog, QMessageBox, QGroupBox, QDockWidget,
     QSizePolicy, QColorDialog, QComboBox, QPushButton,
-    QDialog, QDialogButtonBox, QFormLayout
+    QDialog, QDialogButtonBox, QFormLayout,
+    QScrollArea, QScrollBar
 )
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QAction, QKeySequence, QColor, QIcon
@@ -23,7 +24,31 @@ class MainWindow(QMainWindow):
 
         self._canvas = SpriteCanvas()
         self._canvas.image_changed.connect(self._on_image_changed)
-        self.setCentralWidget(self._canvas)
+        self._canvas.file_dropped.connect(self._on_file_dropped)
+        self._canvas.viewport_changed.connect(self._sync_scrollbars)
+
+        # Canvas + scrollbars
+        canvas_container = QWidget()
+        canvas_layout = QVBoxLayout(canvas_container)
+        canvas_layout.setContentsMargins(0, 0, 0, 0)
+        canvas_layout.setSpacing(0)
+
+        canvas_h = QHBoxLayout()
+        canvas_h.setContentsMargins(0, 0, 0, 0)
+        canvas_h.setSpacing(0)
+        canvas_h.addWidget(self._canvas)
+
+        self._vscroll = QScrollBar(Qt.Orientation.Vertical)
+        self._vscroll.valueChanged.connect(self._on_vscroll)
+        canvas_h.addWidget(self._vscroll)
+
+        canvas_layout.addLayout(canvas_h)
+
+        self._hscroll = QScrollBar(Qt.Orientation.Horizontal)
+        self._hscroll.valueChanged.connect(self._on_hscroll)
+        canvas_layout.addWidget(self._hscroll)
+
+        self.setCentralWidget(canvas_container)
 
         self._build_menu()
         self._build_toolbar()
@@ -159,10 +184,42 @@ class MainWindow(QMainWindow):
         self._chk_show_grid.toggled.connect(self._update_grid)
         grid_layout.addWidget(self._chk_show_grid)
 
+        grid_color_row = QHBoxLayout()
+        grid_color_row.addWidget(QLabel("  色:"))
+        self._btn_grid_color = QPushButton()
+        self._grid_line_color = QColor(255, 0, 0)
+        self._update_color_button(self._btn_grid_color, self._grid_line_color)
+        self._btn_grid_color.setFixedWidth(40)
+        self._btn_grid_color.clicked.connect(self._pick_grid_color)
+        grid_color_row.addWidget(self._btn_grid_color)
+        grid_color_row.addWidget(QLabel("不透明度:"))
+        self._slider_grid_alpha = QSlider(Qt.Orientation.Horizontal)
+        self._slider_grid_alpha.setRange(10, 255)
+        self._slider_grid_alpha.setValue(180)
+        self._slider_grid_alpha.valueChanged.connect(self._update_grid)
+        grid_color_row.addWidget(self._slider_grid_alpha)
+        grid_layout.addLayout(grid_color_row)
+
         self._chk_show_guides = QCheckBox("中心ガイド線表示")
         self._chk_show_guides.setChecked(True)
         self._chk_show_guides.toggled.connect(self._update_grid)
         grid_layout.addWidget(self._chk_show_guides)
+
+        guide_color_row = QHBoxLayout()
+        guide_color_row.addWidget(QLabel("  色:"))
+        self._btn_guide_color = QPushButton()
+        self._guide_line_color = QColor(0, 180, 255)
+        self._update_color_button(self._btn_guide_color, self._guide_line_color)
+        self._btn_guide_color.setFixedWidth(40)
+        self._btn_guide_color.clicked.connect(self._pick_guide_color)
+        guide_color_row.addWidget(self._btn_guide_color)
+        guide_color_row.addWidget(QLabel("不透明度:"))
+        self._slider_guide_alpha = QSlider(Qt.Orientation.Horizontal)
+        self._slider_guide_alpha.setRange(10, 255)
+        self._slider_guide_alpha.setValue(120)
+        self._slider_guide_alpha.valueChanged.connect(self._update_grid)
+        guide_color_row.addWidget(self._slider_guide_alpha)
+        grid_layout.addLayout(guide_color_row)
 
         layout.addWidget(grid_group)
 
@@ -194,7 +251,49 @@ class MainWindow(QMainWindow):
         layout.addWidget(zoom_group)
 
         layout.addStretch()
-        dock.setWidget(panel)
+
+        # Animation preview
+        anim_group = QGroupBox("アニメーション")
+        anim_layout = QVBoxLayout(anim_group)
+
+        self._anim_label = QLabel()
+        self._anim_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._anim_label.setFixedSize(200, 200)
+        self._anim_label.setStyleSheet("background: #1a1a1a; border: 1px solid #444;")
+        anim_layout.addWidget(self._anim_label)
+
+        anim_ctrl = QHBoxLayout()
+        self._btn_anim_play = QPushButton("▶")
+        self._btn_anim_play.setFixedWidth(36)
+        self._btn_anim_play.clicked.connect(self._toggle_anim)
+        anim_ctrl.addWidget(self._btn_anim_play)
+        anim_ctrl.addWidget(QLabel("FPS:"))
+        self._spin_anim_fps = QSpinBox()
+        self._spin_anim_fps.setRange(1, 60)
+        self._spin_anim_fps.setValue(8)
+        self._spin_anim_fps.valueChanged.connect(self._on_fps_changed)
+        anim_ctrl.addWidget(self._spin_anim_fps)
+        anim_layout.addLayout(anim_ctrl)
+
+        self._anim_frame_label = QLabel("- / -")
+        self._anim_frame_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        anim_layout.addWidget(self._anim_frame_label)
+
+        layout.addWidget(anim_group)
+
+        # Animation state
+        from PyQt6.QtCore import QTimer
+        self._anim_frames: list = []
+        self._anim_current = 0
+        self._anim_playing = False
+        self._anim_timer = QTimer(self)
+        self._anim_timer.timeout.connect(self._anim_next_frame)
+
+        scroll = QScrollArea()
+        scroll.setWidget(panel)
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        dock.setWidget(scroll)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
 
     def _update_grid(self):
@@ -203,7 +302,31 @@ class MainWindow(QMainWindow):
         cfg.rows = self._spin_rows.value()
         cfg.show_grid = self._chk_show_grid.isChecked()
         cfg.show_guides = self._chk_show_guides.isChecked()
+        self._anim_rebuild_frames()
+        a_grid  = self._slider_grid_alpha.value()
+        a_guide = self._slider_guide_alpha.value()
+        cfg.line_color  = (self._grid_line_color.red(),  self._grid_line_color.green(),
+                           self._grid_line_color.blue(),  a_grid)
+        cfg.guide_color = (self._guide_line_color.red(), self._guide_line_color.green(),
+                           self._guide_line_color.blue(), a_guide)
         self._canvas.update()
+
+    def _update_color_button(self, btn: QPushButton, color: QColor):
+        btn.setStyleSheet(f"background-color: {color.name()}; border: 1px solid #888;")
+
+    def _pick_grid_color(self):
+        c = QColorDialog.getColor(self._grid_line_color, self, "グリッド線の色")
+        if c.isValid():
+            self._grid_line_color = c
+            self._update_color_button(self._btn_grid_color, c)
+            self._update_grid()
+
+    def _pick_guide_color(self):
+        c = QColorDialog.getColor(self._guide_line_color, self, "ガイド線の色")
+        if c.isValid():
+            self._guide_line_color = c
+            self._update_color_button(self._btn_guide_color, c)
+            self._update_grid()
 
     def _update_eraser_size(self, val: int):
         self._eraser_size_label.setText(f"{val}px")
@@ -224,10 +347,119 @@ class MainWindow(QMainWindow):
         self._status_label = QLabel("画像を開いてください")
         self.statusBar().addWidget(self._status_label)
 
+    def _sync_scrollbars(self):
+        """Update scrollbar ranges and values to match current canvas viewport."""
+        if not self._canvas.image:
+            self._hscroll.setVisible(False)
+            self._vscroll.setVisible(False)
+            return
+        iw, ih = self._canvas.image.size
+        cw, ch = self._canvas.width(), self._canvas.height()
+        zoom = self._canvas._zoom
+        img_w_px = int(iw * zoom)
+        img_h_px = int(ih * zoom)
+
+        # horizontal
+        if img_w_px > cw:
+            self._hscroll.setVisible(True)
+            self._hscroll.setRange(0, img_w_px - cw)
+            self._hscroll.setPageStep(cw)
+            val = int(-self._canvas._offset.x())
+            self._hscroll.blockSignals(True)
+            self._hscroll.setValue(max(0, min(val, img_w_px - cw)))
+            self._hscroll.blockSignals(False)
+        else:
+            self._hscroll.setVisible(False)
+
+        # vertical
+        if img_h_px > ch:
+            self._vscroll.setVisible(True)
+            self._vscroll.setRange(0, img_h_px - ch)
+            self._vscroll.setPageStep(ch)
+            val = int(-self._canvas._offset.y())
+            self._vscroll.blockSignals(True)
+            self._vscroll.setValue(max(0, min(val, img_h_px - ch)))
+            self._vscroll.blockSignals(False)
+        else:
+            self._vscroll.setVisible(False)
+
+    def _on_hscroll(self, val: int):
+        if self._canvas.image:
+            from PyQt6.QtCore import QPointF
+            self._canvas._offset = QPointF(-val, self._canvas._offset.y())
+            self._canvas.update()
+
+    def _on_vscroll(self, val: int):
+        if self._canvas.image:
+            from PyQt6.QtCore import QPointF
+            self._canvas._offset = QPointF(self._canvas._offset.x(), -val)
+            self._canvas.update()
+
     def _on_image_changed(self):
         if self._canvas.image:
             w, h = self._canvas.image.size
             self._status_label.setText(f"{w} × {h} px")
+        self._anim_rebuild_frames()
+
+    def _anim_rebuild_frames(self):
+        """Rebuild animation frames from current image. Called on every image change."""
+        from PyQt6.QtGui import QPixmap
+        from .canvas import pil_to_qimage
+        img = self._canvas.image
+        if not img:
+            self._anim_frames = []
+            self._anim_label.clear()
+            self._anim_frame_label.setText("- / -")
+            return
+        grid = self._canvas.grid
+        iw, ih = img.size
+        frames = []
+        for row in range(grid.config.rows):
+            for col in range(grid.config.cols):
+                x, y, w, h = grid.cell_rect(iw, ih, col, row)
+                cell = img.crop((x, y, x + w, y + h))
+                qi = pil_to_qimage(cell)
+                frames.append(QPixmap.fromImage(qi))
+        self._anim_frames = frames
+        # clamp current index
+        if self._anim_current >= len(frames):
+            self._anim_current = 0
+        self._anim_show_frame(self._anim_current)
+
+    def _anim_show_frame(self, idx: int):
+        if not self._anim_frames:
+            return
+        self._anim_current = idx % len(self._anim_frames)
+        pix = self._anim_frames[self._anim_current]
+        self._anim_label.setPixmap(
+            pix.scaled(self._anim_label.size(),
+                       Qt.AspectRatioMode.KeepAspectRatio,
+                       Qt.TransformationMode.SmoothTransformation)
+        )
+        total = len(self._anim_frames)
+        self._anim_frame_label.setText(f"{self._anim_current + 1} / {total}")
+
+    def _anim_next_frame(self):
+        if self._anim_frames:
+            self._anim_show_frame((self._anim_current + 1) % len(self._anim_frames))
+
+    def _toggle_anim(self):
+        if self._anim_playing:
+            self._anim_timer.stop()
+            self._anim_playing = False
+            self._btn_anim_play.setText("▶")
+        else:
+            self._anim_timer.start(1000 // self._spin_anim_fps.value())
+            self._anim_playing = True
+            self._btn_anim_play.setText("⏸")
+
+    def _on_fps_changed(self, val: int):
+        if self._anim_playing:
+            self._anim_timer.setInterval(1000 // val)
+
+    def _on_file_dropped(self, path: str):
+        self._filepath = path
+        self.setWindowTitle(f"Grid Sprite Editor — {os.path.basename(path)}")
 
     # ------------------------------------------------------------------
     # File operations

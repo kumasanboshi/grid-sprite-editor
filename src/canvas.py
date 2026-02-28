@@ -19,11 +19,14 @@ def pil_to_qimage(img: Image.Image) -> QImage:
 
 class SpriteCanvas(QWidget):
     image_changed = pyqtSignal()
+    file_dropped = pyqtSignal(str)
+    viewport_changed = pyqtSignal()  # emits on zoom or pan
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setMouseTracking(True)
+        self.setAcceptDrops(True)
 
         self.image: Image.Image | None = None
         self._pixmap: QPixmap | None = None
@@ -40,7 +43,8 @@ class SpriteCanvas(QWidget):
         # selection state
         self.selection_rect: QRectF | None = None
         self.lasso_polygon: QPolygonF | None = None
-        self._lasso_snapshot: Image.Image | None = None  # image before lasso move started
+        self._lasso_snapshot: Image.Image | None = None       # image snapshot before drag
+        self._lasso_original_polygon: QPolygonF | None = None  # polygon position before drag
 
         # cell move preview
         self._cell_move_delta: tuple[int, int] | None = None
@@ -106,6 +110,7 @@ class SpriteCanvas(QWidget):
             (self.height() - h * self._zoom) / 2,
         )
         self.update()
+        self.viewport_changed.emit()
 
     # ------------------------------------------------------------------
     # Coordinate helpers
@@ -135,6 +140,16 @@ class SpriteCanvas(QWidget):
         painter.save()
         painter.translate(self._offset)
         painter.scale(self._zoom, self._zoom)
+
+        # checkerboard background to show image boundary and transparency
+        iw_cb, ih_cb = self.image.size
+        cell = 8
+        c1, c2 = QColor(180, 180, 180), QColor(220, 220, 220)
+        for cy in range(0, ih_cb, cell):
+            for cx in range(0, iw_cb, cell):
+                color = c1 if ((cx // cell + cy // cell) % 2 == 0) else c2
+                painter.fillRect(cx, cy, min(cell, iw_cb - cx), min(cell, ih_cb - cy), color)
+
         painter.drawPixmap(0, 0, self._pixmap)
 
         iw, ih = self.image.size
@@ -213,8 +228,8 @@ class SpriteCanvas(QWidget):
     def mousePressEvent(self, event: QMouseEvent):
         image_pos = self.widget_to_image(QPointF(event.position()))
 
-        # Pan: middle button or space+left
-        if event.button() == Qt.MouseButton.MiddleButton or (
+        # Pan: right button, middle button, or space+left
+        if event.button() in (Qt.MouseButton.RightButton, Qt.MouseButton.MiddleButton) or (
             event.button() == Qt.MouseButton.LeftButton and self._space_held
         ):
             self._pan_start = QPointF(event.position())
@@ -236,6 +251,7 @@ class SpriteCanvas(QWidget):
             delta = QPointF(event.position()) - self._pan_start
             self._offset = self._pan_offset_start + delta
             self.update()
+            self.viewport_changed.emit()
             return
 
         if self._alt_active:
@@ -246,9 +262,10 @@ class SpriteCanvas(QWidget):
     def mouseReleaseEvent(self, event: QMouseEvent):
         image_pos = self.widget_to_image(QPointF(event.position()))
 
-        if self._pan_start and (
-            event.button() == Qt.MouseButton.MiddleButton or
-            event.button() == Qt.MouseButton.LeftButton
+        if self._pan_start and event.button() in (
+            Qt.MouseButton.RightButton,
+            Qt.MouseButton.MiddleButton,
+            Qt.MouseButton.LeftButton,
         ):
             self._pan_start = None
             self._pan_offset_start = None
@@ -268,6 +285,7 @@ class SpriteCanvas(QWidget):
         self._zoom *= factor
         self._zoom = max(0.1, min(32.0, self._zoom))
         self.update()
+        self.viewport_changed.emit()
 
     _space_held = False
 
@@ -327,6 +345,7 @@ class SpriteCanvas(QWidget):
     def move_selection_pixels(self, sx: int, sy: int, sw: int, sh: int, dx: int, dy: int):
         if not self.image:
             return
+        self.history.push(self.image)
         region = self.image.crop((sx, sy, sx + sw, sy + sh))
         # erase source
         from PIL import ImageDraw
@@ -343,33 +362,53 @@ class SpriteCanvas(QWidget):
     # ------------------------------------------------------------------
     def commit_lasso_move(self):
         """Called by LassoSelectTool after dragging."""
-        if not self.image or not self.lasso_polygon:
+        if not self.image or not self.lasso_polygon or not self._lasso_snapshot:
             return
-        if self._lasso_snapshot is None:
+        if self._lasso_original_polygon is None:
             return
-        # compute bounding box of original polygon position stored in snapshot
-        # We do a delta-based move: current poly vs snapshot poly
-        # Simpler: re-cut from snapshot and paste at current poly bounding box
-        pts_current = [(int(p.x()), int(p.y())) for p in self.lasso_polygon]
-        if len(pts_current) < 3:
+
+        pts_original = [(int(p.x()), int(p.y())) for p in self._lasso_original_polygon]
+        pts_current  = [(int(p.x()), int(p.y())) for p in self.lasso_polygon]
+        if len(pts_original) < 3 or len(pts_current) < 3:
             return
 
         from PIL import ImageDraw
-        # Build mask from current polygon
-        mask = Image.new("L", self.image.size, 0)
-        draw = ImageDraw.Draw(mask)
-        draw.polygon(pts_current, fill=255)
 
-        # Erase current poly region from image
-        r, g, b, a = self.image.split()
-        new_a = ImageChops.difference(a, mask)
-        self.image = Image.merge("RGBA", (r, g, b, new_a))
+        # Compute move delta from polygon centroid
+        ox = sum(p[0] for p in pts_original) / len(pts_original)
+        oy = sum(p[1] for p in pts_original) / len(pts_original)
+        cx = sum(p[0] for p in pts_current)  / len(pts_current)
+        cy = sum(p[1] for p in pts_current)  / len(pts_current)
+        dx, dy = int(cx - ox), int(cy - oy)
 
-        # Paste from snapshot using current mask
-        snap = self._lasso_snapshot.copy()
-        self.image.paste(snap, mask=mask)
+        # 1. Build mask at original polygon position
+        orig_mask = Image.new("L", self.image.size, 0)
+        ImageDraw.Draw(orig_mask).polygon(pts_original, fill=255)
 
-        self._lasso_snapshot = None
+        # 2. Cut pixels from snapshot preserving original alpha
+        #    multiply(alpha, mask): inside polygon = original alpha, outside = 0
+        snap_r, snap_g, snap_b, snap_a = self._lasso_snapshot.split()
+        cut_alpha = ImageChops.multiply(snap_a, orig_mask)
+        cut = Image.merge("RGBA", (snap_r, snap_g, snap_b, cut_alpha))
+
+        # 3. Shift the cut region by (dx, dy)
+        shifted = Image.new("RGBA", self.image.size, (0, 0, 0, 0))
+        shifted.paste(cut, (dx, dy))
+
+        # 4. Erase original region from current image
+        #    multiply(alpha, inverted_mask): inside polygon = 0, outside = original alpha
+        img_r, img_g, img_b, img_a = self.image.split()
+        inv_mask = ImageChops.invert(orig_mask)
+        new_a = ImageChops.multiply(img_a, inv_mask)
+        self.image = Image.merge("RGBA", (img_r, img_g, img_b, new_a))
+
+        # 5. Alpha-composite shifted region onto image (preserves transparency)
+        self.image = Image.alpha_composite(self.image, shifted)
+
+        # Update snapshot and original polygon to current state for continued dragging
+        self._lasso_snapshot = self.image.copy()
+        self._lasso_original_polygon = QPolygonF(self.lasso_polygon)
+        # Keep lasso_polygon visible so user can drag again; clear with Escape
         self.refresh_pixmap()
         self.image_changed.emit()
         self.update()
@@ -445,6 +484,23 @@ class SpriteCanvas(QWidget):
             self.refresh_pixmap()
             self.image_changed.emit()
             self.update()
+
+    # ------------------------------------------------------------------
+    # Drag & drop
+    # ------------------------------------------------------------------
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if urls and urls[0].toLocalFile().lower().endswith(".png"):
+                event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        urls = event.mimeData().urls()
+        if urls:
+            path = urls[0].toLocalFile()
+            if path.lower().endswith(".png"):
+                self.load_image(path)
+                self.file_dropped.emit(path)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
