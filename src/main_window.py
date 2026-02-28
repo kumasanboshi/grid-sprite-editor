@@ -274,6 +274,7 @@ class MainWindow(QMainWindow):
         cfg.rows = self._spin_rows.value()
         cfg.show_grid = self._chk_show_grid.isChecked()
         cfg.show_guides = self._chk_show_guides.isChecked()
+        self._anim_rebuild_frames()
         a_grid  = self._slider_grid_alpha.value()
         a_guide = self._slider_guide_alpha.value()
         cfg.line_color  = (self._grid_line_color.red(),  self._grid_line_color.green(),
