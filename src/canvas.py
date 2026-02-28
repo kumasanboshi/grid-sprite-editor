@@ -228,8 +228,8 @@ class SpriteCanvas(QWidget):
     def mousePressEvent(self, event: QMouseEvent):
         image_pos = self.widget_to_image(QPointF(event.position()))
 
-        # Pan: middle button or space+left
-        if event.button() == Qt.MouseButton.MiddleButton or (
+        # Pan: right button, middle button, or space+left
+        if event.button() in (Qt.MouseButton.RightButton, Qt.MouseButton.MiddleButton) or (
             event.button() == Qt.MouseButton.LeftButton and self._space_held
         ):
             self._pan_start = QPointF(event.position())
@@ -262,9 +262,10 @@ class SpriteCanvas(QWidget):
     def mouseReleaseEvent(self, event: QMouseEvent):
         image_pos = self.widget_to_image(QPointF(event.position()))
 
-        if self._pan_start and (
-            event.button() == Qt.MouseButton.MiddleButton or
-            event.button() == Qt.MouseButton.LeftButton
+        if self._pan_start and event.button() in (
+            Qt.MouseButton.RightButton,
+            Qt.MouseButton.MiddleButton,
+            Qt.MouseButton.LeftButton,
         ):
             self._pan_start = None
             self._pan_offset_start = None
