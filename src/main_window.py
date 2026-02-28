@@ -132,6 +132,9 @@ class MainWindow(QMainWindow):
         self._tool_actions["lasso"] = tool_action("⌒ ラッソ選択", "lasso", "L")
         self._tool_actions["eraser"] = tool_action("◯ 消しゴム", "eraser", "E")
         self._tool_actions["cell_swap"] = tool_action("⇄ コマ入れ替え", "cell_swap")
+        tb.addSeparator()
+        self._tool_actions["cell_ruler"] = tool_action("― ルーラー線", "cell_ruler", "R")
+        self._tool_actions["cell_scale"] = tool_action("⤡ セル拡縮", "cell_scale", "S")
 
         tb.addSeparator()
         lbl = QLabel("  Alt+ドラッグ\n  = セル移動")
@@ -222,6 +225,61 @@ class MainWindow(QMainWindow):
         grid_layout.addLayout(guide_color_row)
 
         layout.addWidget(grid_group)
+
+        # Cell ruler lines
+        ruler_group = QGroupBox("ルーラー線 (Rキー)")
+        ruler_layout = QVBoxLayout(ruler_group)
+
+        ruler_mode_row = QHBoxLayout()
+        ruler_mode_row.addWidget(QLabel("方向:"))
+        self._btn_ruler_h = QPushButton("― 横線")
+        self._btn_ruler_h.setCheckable(True)
+        self._btn_ruler_h.setChecked(True)
+        self._btn_ruler_h.clicked.connect(lambda: self._set_ruler_mode("H"))
+        self._btn_ruler_v = QPushButton("| 縦線")
+        self._btn_ruler_v.setCheckable(True)
+        self._btn_ruler_v.clicked.connect(lambda: self._set_ruler_mode("V"))
+        ruler_mode_row.addWidget(self._btn_ruler_h)
+        ruler_mode_row.addWidget(self._btn_ruler_v)
+        ruler_layout.addLayout(ruler_mode_row)
+
+        self._chk_show_rulers = QCheckBox("ルーラー線表示")
+        self._chk_show_rulers.setChecked(True)
+        self._chk_show_rulers.toggled.connect(self._update_rulers)
+        ruler_layout.addWidget(self._chk_show_rulers)
+
+        btn_clear_rulers = QPushButton("全消去")
+        btn_clear_rulers.clicked.connect(self._clear_rulers)
+        ruler_layout.addWidget(btn_clear_rulers)
+
+        layout.addWidget(ruler_group)
+
+        # Cell scale
+        scale_group = QGroupBox("セル拡縮 (Sキー)")
+        scale_layout = QVBoxLayout(scale_group)
+        scale_layout.addWidget(QLabel("倍率:"))
+
+        scale_slider_row = QHBoxLayout()
+        self._scale_slider = QSlider(Qt.Orientation.Horizontal)
+        self._scale_slider.setRange(10, 300)
+        self._scale_slider.setValue(100)
+        self._scale_label = QLabel("100%")
+        self._scale_slider.valueChanged.connect(
+            lambda v: self._scale_label.setText(f"{v}%"))
+        scale_slider_row.addWidget(self._scale_slider)
+        scale_slider_row.addWidget(self._scale_label)
+        scale_layout.addLayout(scale_slider_row)
+
+        scale_btn_row = QHBoxLayout()
+        btn_select_all = QPushButton("全選択")
+        btn_select_all.clicked.connect(self._scale_select_all)
+        btn_apply_scale = QPushButton("適用")
+        btn_apply_scale.clicked.connect(self._apply_cell_scale)
+        scale_btn_row.addWidget(btn_select_all)
+        scale_btn_row.addWidget(btn_apply_scale)
+        scale_layout.addLayout(scale_btn_row)
+
+        layout.addWidget(scale_group)
 
         # Eraser size
         eraser_group = QGroupBox("消しゴム")
@@ -327,6 +385,32 @@ class MainWindow(QMainWindow):
             self._guide_line_color = c
             self._update_color_button(self._btn_guide_color, c)
             self._update_grid()
+
+    def _set_ruler_mode(self, mode: str):
+        self._canvas.tools["cell_ruler"].mode = mode
+        self._btn_ruler_h.setChecked(mode == "H")
+        self._btn_ruler_v.setChecked(mode == "V")
+        self._select_tool("cell_ruler")
+
+    def _update_rulers(self):
+        self._canvas.grid.config.show_rulers = self._chk_show_rulers.isChecked()
+        self._canvas.update()
+
+    def _clear_rulers(self):
+        self._canvas.grid.config.h_rulers.clear()
+        self._canvas.grid.config.v_rulers.clear()
+        self._canvas.update()
+
+    def _scale_select_all(self):
+        self._select_tool("cell_scale")
+        self._canvas.tools["cell_scale"].select_all()
+
+    def _apply_cell_scale(self):
+        cells = self._canvas.tools["cell_scale"].selected_cells
+        if not cells:
+            return
+        factor = self._scale_slider.value() / 100.0
+        self._canvas.scale_cells(cells, factor)
 
     def _update_eraser_size(self, val: int):
         self._eraser_size_label.setText(f"{val}px")

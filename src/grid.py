@@ -9,6 +9,17 @@ class GridConfig:
     guide_color: tuple[int, int, int, int] = (0, 180, 255, 120)  # RGBA center guides
     show_grid: bool = True
     show_guides: bool = True
+    # User-placed cell ruler lines (relative 0.0-1.0 within each cell)
+    h_rulers: list = None   # horizontal lines: list of float (relative Y)
+    v_rulers: list = None   # vertical lines:   list of float (relative X)
+    ruler_color: tuple[int, int, int, int] = (255, 220, 0, 200)  # RGBA
+    show_rulers: bool = True
+
+    def __post_init__(self):
+        if self.h_rulers is None:
+            self.h_rulers = []
+        if self.v_rulers is None:
+            self.v_rulers = []
 
 
 class GridManager:
@@ -46,6 +57,54 @@ class GridManager:
             y = r * ch
             lines.append((0, y, image_w, y))
         return lines
+
+    def ruler_lines(self, image_w: int, image_h: int) -> list[tuple[int, int, int, int]]:
+        """Returns (x1,y1,x2,y2) for all user-placed ruler lines across all cells."""
+        lines = []
+        for c in range(self.config.cols):
+            for r in range(self.config.rows):
+                x, y, w, h = self.cell_rect(image_w, image_h, c, r)
+                for rel in self.config.h_rulers:
+                    py = y + int(rel * h)
+                    lines.append((x, py, x + w, py))
+                for rel in self.config.v_rulers:
+                    px = x + int(rel * w)
+                    lines.append((px, y, px, y + h))
+        return lines
+
+    def add_h_ruler(self, rel: float):
+        rel = max(0.0, min(1.0, rel))
+        if not any(abs(r - rel) < 0.005 for r in self.config.h_rulers):
+            self.config.h_rulers.append(rel)
+
+    def add_v_ruler(self, rel: float):
+        rel = max(0.0, min(1.0, rel))
+        if not any(abs(r - rel) < 0.005 for r in self.config.v_rulers):
+            self.config.v_rulers.append(rel)
+
+    def remove_nearest_ruler(self, image_w: int, image_h: int, px: int, py: int, threshold: int = 8):
+        """Remove the ruler line nearest to (px, py). Returns True if removed."""
+        iw, ih = image_w, image_h
+        cell = self.cell_at(iw, ih, px, py)
+        if cell is None:
+            return False
+        c, r = cell
+        cx, cy, cw, ch = self.cell_rect(iw, ih, c, r)
+        rel_x = (px - cx) / cw if cw else 0
+        rel_y = (py - cy) / ch if ch else 0
+        best_dist, best_list, best_idx = threshold + 1, None, -1
+        for i, rel in enumerate(self.config.h_rulers):
+            dist = abs((cy + rel * ch) - py)
+            if dist < best_dist:
+                best_dist, best_list, best_idx = dist, self.config.h_rulers, i
+        for i, rel in enumerate(self.config.v_rulers):
+            dist = abs((cx + rel * cw) - px)
+            if dist < best_dist:
+                best_dist, best_list, best_idx = dist, self.config.v_rulers, i
+        if best_list is not None and best_idx >= 0:
+            best_list.pop(best_idx)
+            return True
+        return False
 
     def guide_lines(self, image_w: int, image_h: int) -> list[tuple[int, int, int, int]]:
         """Returns list of (x1, y1, x2, y2) for center guide lines inside each cell."""
