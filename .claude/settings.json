@@ -1,0 +1,75 @@
+{
+  "permissions": {
+    "allowedPrompts": [
+      {
+        "tool": "Bash",
+        "prompt": "Push*"
+      },
+      {
+        "tool": "Bash",
+        "prompt": "*git push*"
+      },
+      {
+        "tool": "WebSearch",
+        "prompt": "*"
+      },
+      {
+        "tool": "WebFetch",
+        "prompt": "*"
+      },
+      {
+        "tool": "mcp__tavily__tavily_search",
+        "prompt": "*"
+      },
+      {
+        "tool": "mcp__tavily__tavily_extract",
+        "prompt": "*"
+      },
+      {
+        "tool": "mcp__tavily__tavily_research",
+        "prompt": "*"
+      },
+      {
+        "tool": "mcp__firecrawl__firecrawl_search",
+        "prompt": "*"
+      },
+      {
+        "tool": "mcp__firecrawl__firecrawl_scrape",
+        "prompt": "*"
+      }
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'CMD=$(echo \"$CLAUDE_TOOL_INPUT\" | jq -r .command 2>/dev/null); echo \"$CMD\" | grep -qE \"rm -rf|git push --force|git push -f|git reset --hard|git clean -f\" && { echo \"危険なコマンドをブロックしました: $CMD\" >&2; exit 2; } || exit 0'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(echo \"$CLAUDE_TOOL_INPUT\" | jq -r .file_path 2>/dev/null || echo \"$CLAUDE_TOOL_INPUT\" | jq -r .path 2>/dev/null); [ -z \"$FILE\" ] && exit 0; echo \"$FILE\" | grep -qE \"\\.(ts|tsx|js|jsx|json|css|html)$\" || exit 0; which npx >/dev/null 2>&1 && npx prettier --write \"$FILE\" 2>/dev/null; which npx >/dev/null 2>&1 && npx eslint --fix \"$FILE\" 2>/dev/null; exit 0'"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'CMD=$(echo \"$CLAUDE_TOOL_INPUT\" | jq -r .command 2>/dev/null); echo \"$CMD\" | grep -q \"git commit\" && { which npx >/dev/null 2>&1 && npx tsc --noEmit 2>&1 || true; }; exit 0'"
+          }
+        ]
+      }
+    ]
+  }
+}

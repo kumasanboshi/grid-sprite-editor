@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git pull:*)",
+      "Bash(git fetch:*)",
+      "Bash(git worktree:*)",
+      "Bash(gh issue:*)",
+      "Bash(gh pr:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(yarn:*)",
+      "Bash(pnpm:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(cat:*)",
+      "Bash(pwd:*)",
+      "Read",
+      "Glob",
+      "Grep"
+    ],
+    "ask": [
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(rm:*)",
+      "Bash(mv:*)",
+      "WebFetch"
+    ],
+    "deny": [
+      "Bash(sudo:*)",
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(./secrets/**)"
+    ]
+  }
+}
