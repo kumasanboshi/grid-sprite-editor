@@ -337,6 +337,22 @@ class MainWindow(QMainWindow):
         self._anim_frame_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         anim_layout.addWidget(self._anim_frame_label)
 
+        # Frame range
+        range_row = QHBoxLayout()
+        range_row.addWidget(QLabel("範囲:"))
+        self._spin_anim_from = QSpinBox()
+        self._spin_anim_from.setRange(1, 999)
+        self._spin_anim_from.setValue(1)
+        self._spin_anim_from.valueChanged.connect(self._on_anim_range_changed)
+        range_row.addWidget(self._spin_anim_from)
+        range_row.addWidget(QLabel("〜"))
+        self._spin_anim_to = QSpinBox()
+        self._spin_anim_to.setRange(1, 999)
+        self._spin_anim_to.setValue(999)
+        self._spin_anim_to.valueChanged.connect(self._on_anim_range_changed)
+        range_row.addWidget(self._spin_anim_to)
+        anim_layout.addLayout(range_row)
+
         layout.addWidget(anim_group)
 
         # Animation state
@@ -505,15 +521,39 @@ class MainWindow(QMainWindow):
                 qi = pil_to_qimage(cell)
                 frames.append(QPixmap.fromImage(qi))
         self._anim_frames = frames
-        # clamp current index
-        if self._anim_current >= len(frames):
+        total = len(frames)
+        # update range spinbox limits
+        self._spin_anim_from.setMaximum(total)
+        self._spin_anim_to.setMaximum(total)
+        if self._spin_anim_to.value() > total:
+            self._spin_anim_to.setValue(total)
+        if self._anim_current >= total:
             self._anim_current = 0
         self._anim_show_frame(self._anim_current)
+
+    def _anim_range(self) -> tuple[int, int]:
+        """Returns (start_idx, end_idx) inclusive, clamped to valid range."""
+        total = len(self._anim_frames)
+        if total == 0:
+            return 0, 0
+        lo = max(0, min(self._spin_anim_from.value() - 1, total - 1))
+        hi = max(lo, min(self._spin_anim_to.value() - 1, total - 1))
+        return lo, hi
+
+    def _on_anim_range_changed(self):
+        # keep from <= to
+        if self._spin_anim_from.value() > self._spin_anim_to.value():
+            self._spin_anim_to.setValue(self._spin_anim_from.value())
+        lo, _ = self._anim_range()
+        self._anim_show_frame(lo)
 
     def _anim_show_frame(self, idx: int):
         if not self._anim_frames:
             return
-        self._anim_current = idx % len(self._anim_frames)
+        lo, hi = self._anim_range()
+        # clamp idx within range
+        idx = max(lo, min(idx, hi))
+        self._anim_current = idx
         pix = self._anim_frames[self._anim_current]
         self._anim_label.setPixmap(
             pix.scaled(self._anim_label.size(),
@@ -521,11 +561,16 @@ class MainWindow(QMainWindow):
                        Qt.TransformationMode.SmoothTransformation)
         )
         total = len(self._anim_frames)
-        self._anim_frame_label.setText(f"{self._anim_current + 1} / {total}")
+        self._anim_frame_label.setText(f"{self._anim_current + 1} / {total}  [{lo+1}〜{hi+1}]")
 
     def _anim_next_frame(self):
-        if self._anim_frames:
-            self._anim_show_frame((self._anim_current + 1) % len(self._anim_frames))
+        if not self._anim_frames:
+            return
+        lo, hi = self._anim_range()
+        next_idx = self._anim_current + 1
+        if next_idx > hi:
+            next_idx = lo
+        self._anim_show_frame(next_idx)
 
     def _toggle_anim(self):
         if self._anim_playing:
