@@ -53,6 +53,9 @@ class SpriteCanvas(QWidget):
         # cell swap highlight
         self.swap_highlight: tuple[int, int] | None = None
 
+        # cell scale selection highlight
+        self.cell_scale_selected: set[tuple[int, int]] = set()
+
         # active tool (set by MainWindow)
         self._tool = None
 
@@ -64,6 +67,8 @@ class SpriteCanvas(QWidget):
         from .tools.eraser import EraserTool
         from .tools.cell_move import CellMoveTool
         from .tools.cell_swap import CellSwapTool
+        from .tools.cell_ruler import CellRulerTool
+        from .tools.cell_scale import CellScaleTool
 
         self.tools = {
             "rect": RectSelectTool(self),
@@ -71,6 +76,8 @@ class SpriteCanvas(QWidget):
             "eraser": EraserTool(self),
             "cell_move": CellMoveTool(self),
             "cell_swap": CellSwapTool(self),
+            "cell_ruler": CellRulerTool(self),
+            "cell_scale": CellScaleTool(self),
         }
         self.set_tool("rect")
 
@@ -190,6 +197,25 @@ class SpriteCanvas(QWidget):
             col, row = self.swap_highlight
             x, y, w, h = self.grid.cell_rect(iw, ih, col, row)
             painter.fillRect(x, y, w, h, QColor(255, 255, 0, 60))
+
+        # cell scale selection highlight
+        for col, row in self.cell_scale_selected:
+            x, y, w, h = self.grid.cell_rect(iw, ih, col, row)
+            painter.fillRect(x, y, w, h, QColor(0, 255, 150, 50))
+            pen = QPen(QColor(0, 255, 150, 200))
+            pen.setWidth(0)
+            painter.setPen(pen)
+            painter.drawRect(x, y, w, h)
+
+        # user ruler lines
+        if self.grid.config.show_rulers:
+            r2, g2, b2, a2 = self.grid.config.ruler_color
+            pen = QPen(QColor(r2, g2, b2, a2))
+            pen.setWidth(0)
+            pen.setStyle(Qt.PenStyle.SolidLine)
+            painter.setPen(pen)
+            for x1, y1, x2, y2 in self.grid.ruler_lines(iw, ih):
+                painter.drawLine(x1, y1, x2, y2)
 
         painter.restore()
 
@@ -472,6 +498,55 @@ class SpriteCanvas(QWidget):
         cell_canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         cell_canvas.alpha_composite(region, dest=(dx, dy))
         self.image.alpha_composite(cell_canvas, dest=(x, y))
+
+        self.refresh_pixmap()
+        self.image_changed.emit()
+        self.update()
+
+    # ------------------------------------------------------------------
+    # Cell scale
+    # ------------------------------------------------------------------
+    def scale_cells(self, cells: set[tuple[int, int]], factor: float):
+        """Scale content of each cell by factor, centered in cell.
+        Process order: left-to-right, top-to-bottom (later overwrites earlier).
+        Content outside image bounds is clipped; inside image bounds remains."""
+        if not self.image or not cells:
+            return
+        self.history.push(self.image)
+        from PIL import ImageDraw
+
+        iw, ih = self.image.size
+        # sort: top-to-bottom, left-to-right so right-bottom overwrites
+        sorted_cells = sorted(cells, key=lambda c: (c[1], c[0]))
+
+        for col, row in sorted_cells:
+            x, y, w, h = self.grid.cell_rect(iw, ih, col, row)
+            region = self.image.crop((x, y, x + w, y + h))
+
+            # new size
+            nw = max(1, int(w * factor))
+            nh = max(1, int(h * factor))
+            scaled = region.resize((nw, nh), Image.LANCZOS)
+
+            # center offset within cell
+            ox = x + (w - nw) // 2
+            oy = y + (h - nh) // 2
+
+            # erase original cell area
+            draw = ImageDraw.Draw(self.image)
+            draw.rectangle([x, y, x + w, y + h], fill=(0, 0, 0, 0))
+
+            # paste scaled — alpha_composite handles clipping at image bounds
+            # compute intersection with image bounds
+            px = max(0, ox)
+            py = max(0, oy)
+            px2 = min(iw, ox + nw)
+            py2 = min(ih, oy + nh)
+            if px < px2 and py < py2:
+                crop_x = px - ox
+                crop_y = py - oy
+                visible = scaled.crop((crop_x, crop_y, crop_x + (px2 - px), crop_y + (py2 - py)))
+                self.image.alpha_composite(visible, dest=(px, py))
 
         self.refresh_pixmap()
         self.image_changed.emit()
