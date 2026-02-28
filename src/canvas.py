@@ -200,16 +200,27 @@ class SpriteCanvas(QWidget):
             self._draw_lasso(painter)
 
     def _draw_selection_rect(self, painter: QPainter):
+        from .tools.rect_select import _handle_rects, HANDLE_SIZE
         r = self.selection_rect
         tl = self.image_to_widget(r.topLeft())
         br = self.image_to_widget(r.bottomRight())
         rect = QRectF(tl, br)
+
+        # dashed border
         pen = QPen(QColor(255, 255, 255, 200))
         pen.setWidth(1)
         pen.setStyle(Qt.PenStyle.DashLine)
         painter.setPen(pen)
         painter.setBrush(QColor(100, 150, 255, 30))
         painter.drawRect(rect)
+
+        # resize handles
+        painter.setPen(QPen(QColor(255, 255, 255, 220)))
+        painter.setBrush(QColor(80, 120, 255, 200))
+        hs = HANDLE_SIZE / 2
+        for hr in _handle_rects(r, self._zoom):
+            cx = self.image_to_widget(hr.center())
+            painter.drawRect(QRectF(cx.x() - hs, cx.y() - hs, HANDLE_SIZE, HANDLE_SIZE))
 
     def _draw_lasso(self, painter: QPainter):
         poly_widget = QPolygonF([
@@ -338,6 +349,29 @@ class SpriteCanvas(QWidget):
         r, g, b, a = self.image.split()
         new_a = ImageChops.difference(a, mask)
         self.image = Image.merge("RGBA", (r, g, b, new_a))
+
+    # ------------------------------------------------------------------
+    # resize_selection_pixels (rect select resize commit)
+    # ------------------------------------------------------------------
+    def resize_selection_pixels(self,
+                                sx: int, sy: int, sw: int, sh: int,
+                                nx: int, ny: int, nw: int, nh: int):
+        if not self.image:
+            return
+        self.history.push(self.image)
+        from PIL import ImageDraw
+        region = self.image.crop((sx, sy, sx + sw, sy + sh))
+        resized = region.resize((max(1, nw), max(1, nh)), Image.LANCZOS)
+        # erase original
+        draw = ImageDraw.Draw(self.image)
+        draw.rectangle([sx, sy, sx + sw, sy + sh], fill=(0, 0, 0, 0))
+        # paste resized at new position
+        self.image.alpha_composite(resized, dest=(nx, ny))
+        # update selection rect to new size
+        self.selection_rect = QRectF(nx, ny, nw, nh)
+        self.refresh_pixmap()
+        self.image_changed.emit()
+        self.update()
 
     # ------------------------------------------------------------------
     # move_selection_pixels (rect select move commit)
