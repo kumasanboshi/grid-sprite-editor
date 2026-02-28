@@ -5,7 +5,8 @@ from PyQt6.QtWidgets import (
     QToolBar, QLabel, QSpinBox, QSlider, QCheckBox,
     QFileDialog, QMessageBox, QGroupBox, QDockWidget,
     QSizePolicy, QColorDialog, QComboBox, QPushButton,
-    QDialog, QDialogButtonBox, QFormLayout
+    QDialog, QDialogButtonBox, QFormLayout,
+    QScrollArea, QScrollBar
 )
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QAction, QKeySequence, QColor, QIcon
@@ -24,7 +25,30 @@ class MainWindow(QMainWindow):
         self._canvas = SpriteCanvas()
         self._canvas.image_changed.connect(self._on_image_changed)
         self._canvas.file_dropped.connect(self._on_file_dropped)
-        self.setCentralWidget(self._canvas)
+        self._canvas.viewport_changed.connect(self._sync_scrollbars)
+
+        # Canvas + scrollbars
+        canvas_container = QWidget()
+        canvas_layout = QVBoxLayout(canvas_container)
+        canvas_layout.setContentsMargins(0, 0, 0, 0)
+        canvas_layout.setSpacing(0)
+
+        canvas_h = QHBoxLayout()
+        canvas_h.setContentsMargins(0, 0, 0, 0)
+        canvas_h.setSpacing(0)
+        canvas_h.addWidget(self._canvas)
+
+        self._vscroll = QScrollBar(Qt.Orientation.Vertical)
+        self._vscroll.valueChanged.connect(self._on_vscroll)
+        canvas_h.addWidget(self._vscroll)
+
+        canvas_layout.addLayout(canvas_h)
+
+        self._hscroll = QScrollBar(Qt.Orientation.Horizontal)
+        self._hscroll.valueChanged.connect(self._on_hscroll)
+        canvas_layout.addWidget(self._hscroll)
+
+        self.setCentralWidget(canvas_container)
 
         self._build_menu()
         self._build_toolbar()
@@ -265,7 +289,11 @@ class MainWindow(QMainWindow):
         self._anim_timer = QTimer(self)
         self._anim_timer.timeout.connect(self._anim_next_frame)
 
-        dock.setWidget(panel)
+        scroll = QScrollArea()
+        scroll.setWidget(panel)
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        dock.setWidget(scroll)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
 
     def _update_grid(self):
@@ -318,6 +346,54 @@ class MainWindow(QMainWindow):
     def _build_status_bar(self):
         self._status_label = QLabel("画像を開いてください")
         self.statusBar().addWidget(self._status_label)
+
+    def _sync_scrollbars(self):
+        """Update scrollbar ranges and values to match current canvas viewport."""
+        if not self._canvas.image:
+            self._hscroll.setVisible(False)
+            self._vscroll.setVisible(False)
+            return
+        iw, ih = self._canvas.image.size
+        cw, ch = self._canvas.width(), self._canvas.height()
+        zoom = self._canvas._zoom
+        img_w_px = int(iw * zoom)
+        img_h_px = int(ih * zoom)
+
+        # horizontal
+        if img_w_px > cw:
+            self._hscroll.setVisible(True)
+            self._hscroll.setRange(0, img_w_px - cw)
+            self._hscroll.setPageStep(cw)
+            val = int(-self._canvas._offset.x())
+            self._hscroll.blockSignals(True)
+            self._hscroll.setValue(max(0, min(val, img_w_px - cw)))
+            self._hscroll.blockSignals(False)
+        else:
+            self._hscroll.setVisible(False)
+
+        # vertical
+        if img_h_px > ch:
+            self._vscroll.setVisible(True)
+            self._vscroll.setRange(0, img_h_px - ch)
+            self._vscroll.setPageStep(ch)
+            val = int(-self._canvas._offset.y())
+            self._vscroll.blockSignals(True)
+            self._vscroll.setValue(max(0, min(val, img_h_px - ch)))
+            self._vscroll.blockSignals(False)
+        else:
+            self._vscroll.setVisible(False)
+
+    def _on_hscroll(self, val: int):
+        if self._canvas.image:
+            from PyQt6.QtCore import QPointF
+            self._canvas._offset = QPointF(-val, self._canvas._offset.y())
+            self._canvas.update()
+
+    def _on_vscroll(self, val: int):
+        if self._canvas.image:
+            from PyQt6.QtCore import QPointF
+            self._canvas._offset = QPointF(self._canvas._offset.x(), -val)
+            self._canvas.update()
 
     def _on_image_changed(self):
         if self._canvas.image:

@@ -19,7 +19,8 @@ def pil_to_qimage(img: Image.Image) -> QImage:
 
 class SpriteCanvas(QWidget):
     image_changed = pyqtSignal()
-    file_dropped = pyqtSignal(str)  # emits file path on drop
+    file_dropped = pyqtSignal(str)
+    viewport_changed = pyqtSignal()  # emits on zoom or pan
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -109,6 +110,7 @@ class SpriteCanvas(QWidget):
             (self.height() - h * self._zoom) / 2,
         )
         self.update()
+        self.viewport_changed.emit()
 
     # ------------------------------------------------------------------
     # Coordinate helpers
@@ -249,6 +251,7 @@ class SpriteCanvas(QWidget):
             delta = QPointF(event.position()) - self._pan_start
             self._offset = self._pan_offset_start + delta
             self.update()
+            self.viewport_changed.emit()
             return
 
         if self._alt_active:
@@ -281,6 +284,7 @@ class SpriteCanvas(QWidget):
         self._zoom *= factor
         self._zoom = max(0.1, min(32.0, self._zoom))
         self.update()
+        self.viewport_changed.emit()
 
     _space_held = False
 
