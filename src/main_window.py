@@ -23,6 +23,7 @@ class MainWindow(QMainWindow):
 
         self._canvas = SpriteCanvas()
         self._canvas.image_changed.connect(self._on_image_changed)
+        self._canvas.file_dropped.connect(self._on_file_dropped)
         self.setCentralWidget(self._canvas)
 
         self._build_menu()
@@ -228,6 +229,10 @@ class MainWindow(QMainWindow):
         if self._canvas.image:
             w, h = self._canvas.image.size
             self._status_label.setText(f"{w} × {h} px")
+
+    def _on_file_dropped(self, path: str):
+        self._filepath = path
+        self.setWindowTitle(f"Grid Sprite Editor — {os.path.basename(path)}")
 
     # ------------------------------------------------------------------
     # File operations

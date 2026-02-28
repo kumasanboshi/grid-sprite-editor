@@ -19,11 +19,13 @@ def pil_to_qimage(img: Image.Image) -> QImage:
 
 class SpriteCanvas(QWidget):
     image_changed = pyqtSignal()
+    file_dropped = pyqtSignal(str)  # emits file path on drop
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setMouseTracking(True)
+        self.setAcceptDrops(True)
 
         self.image: Image.Image | None = None
         self._pixmap: QPixmap | None = None
@@ -135,6 +137,16 @@ class SpriteCanvas(QWidget):
         painter.save()
         painter.translate(self._offset)
         painter.scale(self._zoom, self._zoom)
+
+        # checkerboard background to show image boundary and transparency
+        iw_cb, ih_cb = self.image.size
+        cell = 8
+        c1, c2 = QColor(180, 180, 180), QColor(220, 220, 220)
+        for cy in range(0, ih_cb, cell):
+            for cx in range(0, iw_cb, cell):
+                color = c1 if ((cx // cell + cy // cell) % 2 == 0) else c2
+                painter.fillRect(cx, cy, min(cell, iw_cb - cx), min(cell, ih_cb - cy), color)
+
         painter.drawPixmap(0, 0, self._pixmap)
 
         iw, ih = self.image.size
@@ -327,6 +339,7 @@ class SpriteCanvas(QWidget):
     def move_selection_pixels(self, sx: int, sy: int, sw: int, sh: int, dx: int, dy: int):
         if not self.image:
             return
+        self.history.push(self.image)
         region = self.image.crop((sx, sy, sx + sw, sy + sh))
         # erase source
         from PIL import ImageDraw
@@ -445,6 +458,23 @@ class SpriteCanvas(QWidget):
             self.refresh_pixmap()
             self.image_changed.emit()
             self.update()
+
+    # ------------------------------------------------------------------
+    # Drag & drop
+    # ------------------------------------------------------------------
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if urls and urls[0].toLocalFile().lower().endswith(".png"):
+                event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        urls = event.mimeData().urls()
+        if urls:
+            path = urls[0].toLocalFile()
+            if path.lower().endswith(".png"):
+                self.load_image(path)
+                self.file_dropped.emit(path)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
