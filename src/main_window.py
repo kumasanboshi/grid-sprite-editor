@@ -227,6 +227,44 @@ class MainWindow(QMainWindow):
         layout.addWidget(zoom_group)
 
         layout.addStretch()
+
+        # Animation preview
+        anim_group = QGroupBox("アニメーション")
+        anim_layout = QVBoxLayout(anim_group)
+
+        self._anim_label = QLabel()
+        self._anim_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._anim_label.setFixedSize(200, 200)
+        self._anim_label.setStyleSheet("background: #1a1a1a; border: 1px solid #444;")
+        anim_layout.addWidget(self._anim_label)
+
+        anim_ctrl = QHBoxLayout()
+        self._btn_anim_play = QPushButton("▶")
+        self._btn_anim_play.setFixedWidth(36)
+        self._btn_anim_play.clicked.connect(self._toggle_anim)
+        anim_ctrl.addWidget(self._btn_anim_play)
+        anim_ctrl.addWidget(QLabel("FPS:"))
+        self._spin_anim_fps = QSpinBox()
+        self._spin_anim_fps.setRange(1, 60)
+        self._spin_anim_fps.setValue(8)
+        self._spin_anim_fps.valueChanged.connect(self._on_fps_changed)
+        anim_ctrl.addWidget(self._spin_anim_fps)
+        anim_layout.addLayout(anim_ctrl)
+
+        self._anim_frame_label = QLabel("- / -")
+        self._anim_frame_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        anim_layout.addWidget(self._anim_frame_label)
+
+        layout.addWidget(anim_group)
+
+        # Animation state
+        from PyQt6.QtCore import QTimer
+        self._anim_frames: list = []
+        self._anim_current = 0
+        self._anim_playing = False
+        self._anim_timer = QTimer(self)
+        self._anim_timer.timeout.connect(self._anim_next_frame)
+
         dock.setWidget(panel)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
 
@@ -284,6 +322,63 @@ class MainWindow(QMainWindow):
         if self._canvas.image:
             w, h = self._canvas.image.size
             self._status_label.setText(f"{w} × {h} px")
+        self._anim_rebuild_frames()
+
+    def _anim_rebuild_frames(self):
+        """Rebuild animation frames from current image. Called on every image change."""
+        from PyQt6.QtGui import QPixmap
+        from .canvas import pil_to_qimage
+        img = self._canvas.image
+        if not img:
+            self._anim_frames = []
+            self._anim_label.clear()
+            self._anim_frame_label.setText("- / -")
+            return
+        grid = self._canvas.grid
+        iw, ih = img.size
+        frames = []
+        for row in range(grid.config.rows):
+            for col in range(grid.config.cols):
+                x, y, w, h = grid.cell_rect(iw, ih, col, row)
+                cell = img.crop((x, y, x + w, y + h))
+                qi = pil_to_qimage(cell)
+                frames.append(QPixmap.fromImage(qi))
+        self._anim_frames = frames
+        # clamp current index
+        if self._anim_current >= len(frames):
+            self._anim_current = 0
+        self._anim_show_frame(self._anim_current)
+
+    def _anim_show_frame(self, idx: int):
+        if not self._anim_frames:
+            return
+        self._anim_current = idx % len(self._anim_frames)
+        pix = self._anim_frames[self._anim_current]
+        self._anim_label.setPixmap(
+            pix.scaled(self._anim_label.size(),
+                       Qt.AspectRatioMode.KeepAspectRatio,
+                       Qt.TransformationMode.SmoothTransformation)
+        )
+        total = len(self._anim_frames)
+        self._anim_frame_label.setText(f"{self._anim_current + 1} / {total}")
+
+    def _anim_next_frame(self):
+        if self._anim_frames:
+            self._anim_show_frame((self._anim_current + 1) % len(self._anim_frames))
+
+    def _toggle_anim(self):
+        if self._anim_playing:
+            self._anim_timer.stop()
+            self._anim_playing = False
+            self._btn_anim_play.setText("▶")
+        else:
+            self._anim_timer.start(1000 // self._spin_anim_fps.value())
+            self._anim_playing = True
+            self._btn_anim_play.setText("⏸")
+
+    def _on_fps_changed(self, val: int):
+        if self._anim_playing:
+            self._anim_timer.setInterval(1000 // val)
 
     def _on_file_dropped(self, path: str):
         self._filepath = path
