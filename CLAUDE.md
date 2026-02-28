@@ -61,19 +61,34 @@ grid-sprite-editor/
 ## Guidelines
 - 不明点は確認してから実装
 - 既存のコードスタイルを尊重
-- TDD は採用しない（品質は手動確認とコードレビューで担保）
+- TDD は採用しない。動作確認は手動で行う
 - PyQt6 のシグナル/スロット機構を積極的に活用
 - 画像操作は Pillow で行い、表示は QPixmap に変換
 
 ## ワークフロー
 
-1. **ブランチ**: feature/issue-{番号} を切る
-2. **実装**: コードを書く
-3. **動作確認**: `python main.py` で手動確認
-4. **PR作成**: `gh pr create` でPR → CodeRabbit レビュー
-5. **マージ**: レビュー通過後 main へマージ
+### 基本フロー
+```
+feature ブランチ → 実装 → 動作確認（python main.py） → PR → マージ
+```
 
-**mainブランチへの直接プッシュは禁止**
+### ルール
+- **main ブランチへの直接プッシュ禁止** — 必ず feature ブランチを切る
+- **PR を作成する** — CodeRabbit の自動レビューを活用、変更履歴がポートフォリオ映えする
+- **コミットは小さめに** — 後から巻き戻しやすくする
+
+### コミットメッセージ規則
+```
+feat: add lasso selection tool
+fix: grid line not rendering at edges
+refactor: extract canvas drawing logic
+docs: update README with screenshots
+```
+
+### やらなくていいこと
+- テスト（pytest 等）の作成
+- 型チェック（mypy）のCI
+- 厳密なコードレビュープロセス
 
 ## サブエージェント一覧
 
