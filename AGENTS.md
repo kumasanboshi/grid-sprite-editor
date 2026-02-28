@@ -49,15 +49,29 @@ grid-sprite-editor/
 ## Guidelines
 - 不明点は確認してから実装
 - 既存のコードスタイルを尊重
-- TDD は採用しない
+- TDD は採用しない。動作確認は手動で行う
 
-## Development Workflow
+## ワークフロー
 
-| ステップ | 内容 |
-|---------|------|
-| 1. 探索 | 関連ファイル調査・仕様確認 |
-| 2. 計画 | 実装方針策定 |
-| 3. 実装 | コーディング |
-| 4. 確認 | `python main.py` で動作確認 |
-| 5. PR | `gh pr create` でPR作成 |
-| 6. マージ | レビュー後マージ |
+### 基本フロー
+```
+feature ブランチ → 実装 → 動作確認（python main.py） → PR → マージ
+```
+
+### ルール
+- **main ブランチへの直接プッシュ禁止** — 必ず feature ブランチを切る
+- **PR を作成する** — CodeRabbit の自動レビューを活用、変更履歴がポートフォリオ映えする
+- **コミットは小さめに** — 後から巻き戻しやすくする
+
+### コミットメッセージ規則
+```
+feat: add lasso selection tool
+fix: grid line not rendering at edges
+refactor: extract canvas drawing logic
+docs: update README with screenshots
+```
+
+### やらなくていいこと
+- テスト（pytest 等）の作成
+- 型チェック（mypy）のCI
+- 厳密なコードレビュープロセス
