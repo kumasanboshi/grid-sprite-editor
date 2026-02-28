@@ -1,69 +1,63 @@
 # AGENTS.md
 
 ## Project
-<!-- プロジェクト名と簡単な説明 -->
-PROJECT_NAME - 説明
+grid-sprite-editor - スプライトシート画像エディター（Windows デスクトップアプリ）
+
+ChatGPT 等で生成した N×M グリッドのスプライトシート PNG を修正・編集するためのツール。
 
 ## Tech Stack
-<!-- 使用技術を記載 -->
-- Frontend:
-- Backend:
-- Database:
-- API:
+- Language: Python 3.11+
+- UI: PyQt6
+- Image: Pillow (PIL)
+- Distribution: PyInstaller（Windows exe）
 
 ## Key Commands
 ```bash
-# よく使うコマンドを記載
-npm start          # 開発サーバー起動
-npm run build      # ビルド
-npm run test       # テスト実行
-npm run lint       # リンター実行
+pip install -r requirements.txt   # 依存インストール
+python main.py                     # アプリ起動
+pyinstaller --onefile --windowed main.py  # exeビルド
 ```
 
 ## Project Structure
 ```
-src/
-├── components/    #
-├── pages/         #
-├── services/      #
-├── hooks/         #
-├── types/         #
-├── utils/         #
-└── constants/     #
+grid-sprite-editor/
+├── main.py
+├── requirements.txt
+├── src/
+│   ├── main_window.py
+│   ├── canvas.py
+│   ├── tools/
+│   ├── grid.py
+│   ├── animation.py
+│   ├── history.py
+│   └── export.py
+└── docs/
+    ├── SPEC.md
+    └── ARCHITECTURE.md
 ```
 
 ## Important Files
-- `docs/PROJECT.md` - プロジェクト詳細・要件
-- `docs/ARCHITECTURE.md` - 技術設計・データモデル
-- `docs/CONTRIBUTING.md` - コーディング規約・開発フロー
+- `docs/SPEC.md` - 機能仕様・要件定義
+- `docs/ARCHITECTURE.md` - 技術設計
 
 ## Domain Terms
-<!-- プロジェクト固有の用語を記載 -->
-- **Term1**: 説明
-- **Term2**: 説明
+- **スプライトシート**: 複数コマを1枚に並べたPNG
+- **セル**: グリッドで分割された各コマ
+- **グリッド**: N×M の分割ライン
+- **ラッソ選択**: 自由形状の範囲選択
 
 ## Guidelines
 - 不明点は確認してから実装
 - 既存のコードスタイルを尊重
-- **テスト駆動開発（TDD）を採用**
+- TDD は採用しない
 
 ## Development Workflow
-各タスクは以下のステップで進める。問題がなければサブエージェントを使用すること。
 
-| ステップ | 内容 | 担当 |
-|---------|------|------|
-| 1. 探索 | 関連ファイル調査・仕様確認 | **Exploreエージェント** |
-| 2. 計画 | 実装方針策定・テスト設計 | **Planエージェント** |
-| 3. 実装 | TDDサイクル（テスト→実装） | 直接実行 |
-| 4. 検証 | 実装品質の検証 | **独立サブエージェント** |
-| 5. PR作成 | 型チェック・テスト・PR作成 | **Bashエージェント** |
-| 6. レビュー | ダブルレビュー・指摘対応 | **サブエージェント + Codex** |
-| 7. マージ | PRマージ・ブランチ整理 | **Bashエージェント** |
-
-### サブエージェント一覧
-- **Plan**: コードベース探索 + 実装計画の設計
-- **Explore**: コードベース探索（調査のみの場合）
-- **Bash**: git操作、コマンド実行
-- **general-purpose**: 複雑なマルチステップタスク
-- **test-designer**: テストケースの設計とレビュー
-<!-- プロジェクト固有のエージェントを追加 -->
+| ステップ | 内容 |
+|---------|------|
+| 1. 探索 | 関連ファイル調査・仕様確認 |
+| 2. 計画 | 実装方針策定 |
+| 3. 実装 | コーディング |
+| 4. 確認 | `python main.py` で動作確認 |
+| 5. PR | `gh pr create` でPR作成 |
+| 6. マージ | レビュー後マージ |
