@@ -380,18 +380,22 @@ class SpriteCanvas(QWidget):
         orig_mask = Image.new("L", self.image.size, 0)
         ImageDraw.Draw(orig_mask).polygon(pts_original, fill=255)
 
-        # 2. Cut pixels from snapshot at original polygon
-        cut = Image.new("RGBA", self.image.size, (0, 0, 0, 0))
-        cut.paste(self._lasso_snapshot, mask=orig_mask)
+        # 2. Cut pixels from snapshot preserving original alpha
+        #    multiply(alpha, mask): inside polygon = original alpha, outside = 0
+        snap_r, snap_g, snap_b, snap_a = self._lasso_snapshot.split()
+        cut_alpha = ImageChops.multiply(snap_a, orig_mask)
+        cut = Image.merge("RGBA", (snap_r, snap_g, snap_b, cut_alpha))
 
         # 3. Shift the cut region by (dx, dy)
         shifted = Image.new("RGBA", self.image.size, (0, 0, 0, 0))
         shifted.paste(cut, (dx, dy))
 
         # 4. Erase original region from current image
-        r, g, b, a = self.image.split()
-        new_a = ImageChops.difference(a, orig_mask)
-        self.image = Image.merge("RGBA", (r, g, b, new_a))
+        #    multiply(alpha, inverted_mask): inside polygon = 0, outside = original alpha
+        img_r, img_g, img_b, img_a = self.image.split()
+        inv_mask = ImageChops.invert(orig_mask)
+        new_a = ImageChops.multiply(img_a, inv_mask)
+        self.image = Image.merge("RGBA", (img_r, img_g, img_b, new_a))
 
         # 5. Alpha-composite shifted region onto image (preserves transparency)
         self.image = Image.alpha_composite(self.image, shifted)
