@@ -1,55 +1,49 @@
-# Project Template
+# grid-sprite-editor
 
-AIエージェント対応のプロジェクトテンプレート。
+ChatGPT 等の AI が生成したスプライトシート画像（PNG）を修正・編集するための Windows デスクトップアプリ。
 
-## 含まれるファイル
+9分割（3×3）をはじめとした N×M グリッドのスプライトシートで、コマのはみ出しや位置ズレを直感的に修正できます。
 
-| ファイル | 用途 |
-|----------|------|
-| `CLAUDE.md` | Claude Code用の設定（要カスタマイズ） |
-| `AGENTS.md` | 他AIエージェント用（Codex, Cursor等） |
-| `WORKFLOW_SETUP.md` | Issue + worktree + PR のワークフロー説明 |
-| `.gitignore` | 汎用的な除外設定 |
-| `.claude/settings.local.json` | Claude Code権限設定 |
-| `docs/CONTRIBUTING.md` | Git規約・開発フロー |
+## Features
 
-## 使い方
+- **PNG 読み込み・保存** - スプライトシートをそのまま開いて編集・上書き保存
+- **N×M グリッド表示** - 3×3 をはじめ任意の分割数に対応
+- **グリッド線手動調整** - 等分割でないスプライトシートに対応
+- **矩形選択 & 移動** - 選択範囲をドラッグで移動
+- **ラッソ選択（自由形状）** - はみ出し部分を自由形状で選択・移動
+- **選択範囲の拡縮** - 選択範囲をリサイズ
+- **消しゴム** - はみ出し箇所を透明化
+- **コマ単位入れ替え** - セル同士をワンクリックで入れ替え
+- **アニメーションプレビュー** - 全コマを連続再生して確認
+- **リサイズ** - 3（またはN）で割り切れるサイズに変換（例: 1024→1536）
+- **個別コマエクスポート** - 各セルを個別PNG として書き出し
+- **Undo/Redo** - 何度でもやり直し可能
+- **ズームイン/アウト** - 細部の編集に対応
 
-### 1. このテンプレートから新規リポジトリ作成
+## Requirements
+
+- Windows 10/11
+- Python 3.11+
+- PyQt6
+- Pillow
+
+## Installation
+
 ```bash
-gh repo create my-new-project --template kumasanboshi/project-template
+git clone https://github.com/kumasanboshi/grid-sprite-editor.git
+cd grid-sprite-editor
+pip install -r requirements.txt
+python main.py
 ```
 
-または GitHub上で「Use this template」ボタン
+## Usage
 
-### 2. CLAUDE.md / AGENTS.md をカスタマイズ
-プロジェクト固有の情報を記入：
-- プロジェクト名・説明
-- 技術スタック
-- コマンド
-- ディレクトリ構造
-- ドメイン用語
+1. `ファイル > 開く` でスプライトシートPNGを読み込む
+2. グリッド設定（列数・行数）を指定
+3. 必要に応じてグリッド線を手動調整
+4. ツールを選んで編集
+5. `ファイル > 保存` で上書き保存
 
-### 3. 必要に応じてdocsを追加
-- `docs/PROJECT.md` - プロジェクト詳細
-- `docs/ARCHITECTURE.md` - 技術設計
+## License
 
-## AIエージェント対応
-
-### Claude Code
-`CLAUDE.md` を自動で読み込み
-
-### OpenAI Codex
-`AGENTS.md` を自動で読み込み
-
-### Cursor / Zed / その他
-`AGENTS.md` または同等のファイルを参照
-
-## CodeRabbit設定（推奨）
-
-1. https://www.coderabbit.ai でサインアップ
-2. リポジトリにインストール
-3. PR作成時に自動レビュー
-
-## ライセンス
 MIT
