@@ -12,6 +12,10 @@ class LassoSelectTool(BaseTool):
 
     def mouse_press(self, event: QMouseEvent, image_pos: QPointF):
         if self.canvas.lasso_polygon and self._polygon_contains(self.canvas.lasso_polygon, image_pos):
+            # start drag: take snapshot and remember original polygon
+            self.canvas.history.push(self.canvas.image)
+            self.canvas._lasso_snapshot = self.canvas.image.copy()
+            self.canvas._lasso_original_polygon = QPolygonF(self.canvas.lasso_polygon)
             self._dragging_selection = True
             self._drag_start = image_pos
         else:

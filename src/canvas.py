@@ -42,7 +42,8 @@ class SpriteCanvas(QWidget):
         # selection state
         self.selection_rect: QRectF | None = None
         self.lasso_polygon: QPolygonF | None = None
-        self._lasso_snapshot: Image.Image | None = None  # image before lasso move started
+        self._lasso_snapshot: Image.Image | None = None       # image snapshot before drag
+        self._lasso_original_polygon: QPolygonF | None = None  # polygon position before drag
 
         # cell move preview
         self._cell_move_delta: tuple[int, int] | None = None
@@ -356,33 +357,42 @@ class SpriteCanvas(QWidget):
     # ------------------------------------------------------------------
     def commit_lasso_move(self):
         """Called by LassoSelectTool after dragging."""
-        if not self.image or not self.lasso_polygon:
+        if not self.image or not self.lasso_polygon or not self._lasso_snapshot:
+            self.clear_selection()
             return
-        if self._lasso_snapshot is None:
+        if self._lasso_original_polygon is None:
+            self.clear_selection()
             return
-        # compute bounding box of original polygon position stored in snapshot
-        # We do a delta-based move: current poly vs snapshot poly
-        # Simpler: re-cut from snapshot and paste at current poly bounding box
-        pts_current = [(int(p.x()), int(p.y())) for p in self.lasso_polygon]
-        if len(pts_current) < 3:
+
+        pts_original = [(int(p.x()), int(p.y())) for p in self._lasso_original_polygon]
+        pts_current  = [(int(p.x()), int(p.y())) for p in self.lasso_polygon]
+        if len(pts_original) < 3 or len(pts_current) < 3:
+            self.clear_selection()
             return
 
         from PIL import ImageDraw
-        # Build mask from current polygon
-        mask = Image.new("L", self.image.size, 0)
-        draw = ImageDraw.Draw(mask)
-        draw.polygon(pts_current, fill=255)
 
-        # Erase current poly region from image
+        # 1. Build mask of the ORIGINAL polygon on the snapshot
+        orig_mask = Image.new("L", self.image.size, 0)
+        ImageDraw.Draw(orig_mask).polygon(pts_original, fill=255)
+
+        # 2. Cut the region from the snapshot
+        cut = Image.new("RGBA", self.image.size, (0, 0, 0, 0))
+        cut.paste(self._lasso_snapshot, mask=orig_mask)
+
+        # 3. Erase original region from current image
         r, g, b, a = self.image.split()
-        new_a = ImageChops.difference(a, mask)
+        new_a = ImageChops.difference(a, orig_mask)
         self.image = Image.merge("RGBA", (r, g, b, new_a))
 
-        # Paste from snapshot using current mask
-        snap = self._lasso_snapshot.copy()
-        self.image.paste(snap, mask=mask)
+        # 4. Build mask of the CURRENT (moved) polygon and paste cut region there
+        cur_mask = Image.new("L", self.image.size, 0)
+        ImageDraw.Draw(cur_mask).polygon(pts_current, fill=255)
+        self.image.paste(cut, mask=cur_mask)
 
         self._lasso_snapshot = None
+        self._lasso_original_polygon = None
+        self.clear_selection()
         self.refresh_pixmap()
         self.image_changed.emit()
         self.update()
