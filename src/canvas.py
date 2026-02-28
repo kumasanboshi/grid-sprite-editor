@@ -358,41 +358,48 @@ class SpriteCanvas(QWidget):
     def commit_lasso_move(self):
         """Called by LassoSelectTool after dragging."""
         if not self.image or not self.lasso_polygon or not self._lasso_snapshot:
-            self.clear_selection()
             return
         if self._lasso_original_polygon is None:
-            self.clear_selection()
             return
 
         pts_original = [(int(p.x()), int(p.y())) for p in self._lasso_original_polygon]
         pts_current  = [(int(p.x()), int(p.y())) for p in self.lasso_polygon]
         if len(pts_original) < 3 or len(pts_current) < 3:
-            self.clear_selection()
             return
 
         from PIL import ImageDraw
 
-        # 1. Build mask of the ORIGINAL polygon on the snapshot
+        # Compute move delta from polygon centroid
+        ox = sum(p[0] for p in pts_original) / len(pts_original)
+        oy = sum(p[1] for p in pts_original) / len(pts_original)
+        cx = sum(p[0] for p in pts_current)  / len(pts_current)
+        cy = sum(p[1] for p in pts_current)  / len(pts_current)
+        dx, dy = int(cx - ox), int(cy - oy)
+
+        # 1. Build mask at original polygon position
         orig_mask = Image.new("L", self.image.size, 0)
         ImageDraw.Draw(orig_mask).polygon(pts_original, fill=255)
 
-        # 2. Cut the region from the snapshot
+        # 2. Cut pixels from snapshot at original polygon
         cut = Image.new("RGBA", self.image.size, (0, 0, 0, 0))
         cut.paste(self._lasso_snapshot, mask=orig_mask)
 
-        # 3. Erase original region from current image
+        # 3. Shift the cut region by (dx, dy)
+        shifted = Image.new("RGBA", self.image.size, (0, 0, 0, 0))
+        shifted.paste(cut, (dx, dy))
+
+        # 4. Erase original region from current image
         r, g, b, a = self.image.split()
         new_a = ImageChops.difference(a, orig_mask)
         self.image = Image.merge("RGBA", (r, g, b, new_a))
 
-        # 4. Build mask of the CURRENT (moved) polygon and paste cut region there
-        cur_mask = Image.new("L", self.image.size, 0)
-        ImageDraw.Draw(cur_mask).polygon(pts_current, fill=255)
-        self.image.paste(cut, mask=cur_mask)
+        # 5. Alpha-composite shifted region onto image (preserves transparency)
+        self.image = Image.alpha_composite(self.image, shifted)
 
-        self._lasso_snapshot = None
-        self._lasso_original_polygon = None
-        self.clear_selection()
+        # Update snapshot and original polygon to current state for continued dragging
+        self._lasso_snapshot = self.image.copy()
+        self._lasso_original_polygon = QPolygonF(self.lasso_polygon)
+        # Keep lasso_polygon visible so user can drag again; clear with Escape
         self.refresh_pixmap()
         self.image_changed.emit()
         self.update()
