@@ -160,10 +160,42 @@ class MainWindow(QMainWindow):
         self._chk_show_grid.toggled.connect(self._update_grid)
         grid_layout.addWidget(self._chk_show_grid)
 
+        grid_color_row = QHBoxLayout()
+        grid_color_row.addWidget(QLabel("  色:"))
+        self._btn_grid_color = QPushButton()
+        self._grid_line_color = QColor(255, 0, 0)
+        self._update_color_button(self._btn_grid_color, self._grid_line_color)
+        self._btn_grid_color.setFixedWidth(40)
+        self._btn_grid_color.clicked.connect(self._pick_grid_color)
+        grid_color_row.addWidget(self._btn_grid_color)
+        grid_color_row.addWidget(QLabel("不透明度:"))
+        self._slider_grid_alpha = QSlider(Qt.Orientation.Horizontal)
+        self._slider_grid_alpha.setRange(10, 255)
+        self._slider_grid_alpha.setValue(180)
+        self._slider_grid_alpha.valueChanged.connect(self._update_grid)
+        grid_color_row.addWidget(self._slider_grid_alpha)
+        grid_layout.addLayout(grid_color_row)
+
         self._chk_show_guides = QCheckBox("中心ガイド線表示")
         self._chk_show_guides.setChecked(True)
         self._chk_show_guides.toggled.connect(self._update_grid)
         grid_layout.addWidget(self._chk_show_guides)
+
+        guide_color_row = QHBoxLayout()
+        guide_color_row.addWidget(QLabel("  色:"))
+        self._btn_guide_color = QPushButton()
+        self._guide_line_color = QColor(0, 180, 255)
+        self._update_color_button(self._btn_guide_color, self._guide_line_color)
+        self._btn_guide_color.setFixedWidth(40)
+        self._btn_guide_color.clicked.connect(self._pick_guide_color)
+        guide_color_row.addWidget(self._btn_guide_color)
+        guide_color_row.addWidget(QLabel("不透明度:"))
+        self._slider_guide_alpha = QSlider(Qt.Orientation.Horizontal)
+        self._slider_guide_alpha.setRange(10, 255)
+        self._slider_guide_alpha.setValue(120)
+        self._slider_guide_alpha.valueChanged.connect(self._update_grid)
+        guide_color_row.addWidget(self._slider_guide_alpha)
+        grid_layout.addLayout(guide_color_row)
 
         layout.addWidget(grid_group)
 
@@ -204,7 +236,30 @@ class MainWindow(QMainWindow):
         cfg.rows = self._spin_rows.value()
         cfg.show_grid = self._chk_show_grid.isChecked()
         cfg.show_guides = self._chk_show_guides.isChecked()
+        a_grid  = self._slider_grid_alpha.value()
+        a_guide = self._slider_guide_alpha.value()
+        cfg.line_color  = (self._grid_line_color.red(),  self._grid_line_color.green(),
+                           self._grid_line_color.blue(),  a_grid)
+        cfg.guide_color = (self._guide_line_color.red(), self._guide_line_color.green(),
+                           self._guide_line_color.blue(), a_guide)
         self._canvas.update()
+
+    def _update_color_button(self, btn: QPushButton, color: QColor):
+        btn.setStyleSheet(f"background-color: {color.name()}; border: 1px solid #888;")
+
+    def _pick_grid_color(self):
+        c = QColorDialog.getColor(self._grid_line_color, self, "グリッド線の色")
+        if c.isValid():
+            self._grid_line_color = c
+            self._update_color_button(self._btn_grid_color, c)
+            self._update_grid()
+
+    def _pick_guide_color(self):
+        c = QColorDialog.getColor(self._guide_line_color, self, "ガイド線の色")
+        if c.isValid():
+            self._guide_line_color = c
+            self._update_color_button(self._btn_guide_color, c)
+            self._update_grid()
 
     def _update_eraser_size(self, val: int):
         self._eraser_size_label.setText(f"{val}px")
