@@ -418,6 +418,29 @@ class SpriteCanvas(QWidget):
         self.update()
 
     # ------------------------------------------------------------------
+    # flip_horizontal
+    # ------------------------------------------------------------------
+    def flip_horizontal(self):
+        """Flip selection rect region horizontally. If no selection, flip whole image."""
+        if not self.image:
+            return
+        self.history.push(self.image)
+        if self.selection_rect:
+            r = self.selection_rect
+            x, y = int(r.x()), int(r.y())
+            w, h = int(r.width()), int(r.height())
+            region = self.image.crop((x, y, x + w, y + h))
+            flipped = region.transpose(Image.FLIP_LEFT_RIGHT)
+            from PIL import ImageDraw
+            ImageDraw.Draw(self.image).rectangle([x, y, x + w, y + h], fill=(0, 0, 0, 0))
+            self.image.alpha_composite(flipped, dest=(x, y))
+        else:
+            self.image = self.image.transpose(Image.FLIP_LEFT_RIGHT)
+        self.refresh_pixmap()
+        self.image_changed.emit()
+        self.update()
+
+    # ------------------------------------------------------------------
     # copy_selection_pixels (rect select Ctrl+drag copy)
     # ------------------------------------------------------------------
     def copy_selection_pixels(self, sx: int, sy: int, sw: int, sh: int, dx: int, dy: int):
