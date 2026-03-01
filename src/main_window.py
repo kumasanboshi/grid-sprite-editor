@@ -91,6 +91,10 @@ class MainWindow(QMainWindow):
         self._act_redo.triggered.connect(self._canvas.redo)
         edit_menu.addAction(self._act_undo)
         edit_menu.addAction(self._act_redo)
+        edit_menu.addSeparator()
+        self._act_flip_h = QAction("左右反転", self, shortcut=QKeySequence("H"))
+        self._act_flip_h.triggered.connect(self._canvas.flip_horizontal)
+        edit_menu.addAction(self._act_flip_h)
 
         # View
         view_menu = mb.addMenu("表示(&V)")
@@ -293,6 +297,14 @@ class MainWindow(QMainWindow):
         self._eraser_size_label = QLabel("20px")
         eraser_layout.addWidget(self._eraser_size_label)
         layout.addWidget(eraser_group)
+
+        # Image edit
+        edit_group = QGroupBox("編集")
+        edit_layout = QVBoxLayout(edit_group)
+        btn_flip_h = QPushButton("↔ 左右反転 (H)")
+        btn_flip_h.clicked.connect(self._canvas.flip_horizontal)
+        edit_layout.addWidget(btn_flip_h)
+        layout.addWidget(edit_group)
 
         # Zoom
         zoom_group = QGroupBox("ズーム")
