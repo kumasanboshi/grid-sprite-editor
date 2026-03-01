@@ -42,6 +42,7 @@ class RectSelectTool(BaseTool):
         self._drag_origin_rect: QRectF | None = None
         self._resize_handle: int | None = None   # 0-7
         self._resize_origin_rect: QRectF | None = None
+        self._copy_mode: bool = False
 
     def _get_handle_at(self, image_pos: QPointF) -> int | None:
         sel = self.canvas.selection_rect
@@ -65,6 +66,7 @@ class RectSelectTool(BaseTool):
 
         if sel and sel.contains(image_pos):
             self._dragging_selection = True
+            self._copy_mode = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
             self._drag_start = image_pos
             self._drag_origin_rect = QRectF(sel)
         else:
@@ -122,6 +124,7 @@ class RectSelectTool(BaseTool):
         self._dragging_selection = False
         self._drag_start = None
         self._drag_origin_rect = None
+        self._copy_mode = False
 
     def _calc_resize(self, image_pos: QPointF) -> QRectF:
         r = QRectF(self._resize_origin_rect)
@@ -141,11 +144,18 @@ class RectSelectTool(BaseTool):
         dy = int(image_pos.y() - self._drag_start.y())
         if dx == 0 and dy == 0:
             return
-        self.canvas.move_selection_pixels(
-            int(self._drag_origin_rect.x()), int(self._drag_origin_rect.y()),
-            int(self._drag_origin_rect.width()), int(self._drag_origin_rect.height()),
-            dx, dy
-        )
+        if self._copy_mode:
+            self.canvas.copy_selection_pixels(
+                int(self._drag_origin_rect.x()), int(self._drag_origin_rect.y()),
+                int(self._drag_origin_rect.width()), int(self._drag_origin_rect.height()),
+                dx, dy
+            )
+        else:
+            self.canvas.move_selection_pixels(
+                int(self._drag_origin_rect.x()), int(self._drag_origin_rect.y()),
+                int(self._drag_origin_rect.width()), int(self._drag_origin_rect.height()),
+                dx, dy
+            )
 
     def _commit_resize(self, orig: QRectF, new: QRectF):
         self.canvas.resize_selection_pixels(

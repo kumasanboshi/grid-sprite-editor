@@ -418,6 +418,19 @@ class SpriteCanvas(QWidget):
         self.update()
 
     # ------------------------------------------------------------------
+    # copy_selection_pixels (rect select Ctrl+drag copy)
+    # ------------------------------------------------------------------
+    def copy_selection_pixels(self, sx: int, sy: int, sw: int, sh: int, dx: int, dy: int):
+        if not self.image:
+            return
+        self.history.push(self.image)
+        region = self.image.crop((sx, sy, sx + sw, sy + sh))
+        self.image.alpha_composite(region, dest=(sx + dx, sy + dy))
+        self.refresh_pixmap()
+        self.image_changed.emit()
+        self.update()
+
+    # ------------------------------------------------------------------
     # Lasso move commit
     # ------------------------------------------------------------------
     def commit_lasso_move(self):
