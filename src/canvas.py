@@ -347,6 +347,7 @@ class SpriteCanvas(QWidget):
         self.selection_rect = None
         self.lasso_polygon = None
         self._lasso_snapshot = None
+        self._lasso_original_polygon = None
         self.update()
 
     def _delete_selection(self):
