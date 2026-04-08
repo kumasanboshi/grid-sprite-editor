@@ -95,6 +95,9 @@ class MainWindow(QMainWindow):
         self._act_flip_h = QAction("左右反転", self, shortcut=QKeySequence("H"))
         self._act_flip_h.triggered.connect(self._canvas.flip_horizontal)
         edit_menu.addAction(self._act_flip_h)
+        self._act_trim = QAction("透明余白トリム", self)
+        self._act_trim.triggered.connect(self._canvas.trim_transparency)
+        edit_menu.addAction(self._act_trim)
 
         # View
         view_menu = mb.addMenu("表示(&V)")
@@ -304,6 +307,9 @@ class MainWindow(QMainWindow):
         btn_flip_h = QPushButton("↔ 左右反転 (H)")
         btn_flip_h.clicked.connect(self._canvas.flip_horizontal)
         edit_layout.addWidget(btn_flip_h)
+        btn_trim = QPushButton("✂ 透明余白トリム")
+        btn_trim.clicked.connect(self._canvas.trim_transparency)
+        edit_layout.addWidget(btn_trim)
         layout.addWidget(edit_group)
 
         # Zoom
@@ -458,6 +464,12 @@ class MainWindow(QMainWindow):
     def _build_status_bar(self):
         self._status_label = QLabel("画像を開いてください")
         self.statusBar().addWidget(self._status_label)
+        self._pixel_label = QLabel("")
+        self.statusBar().addPermanentWidget(self._pixel_label)
+        self._canvas.pixel_hovered.connect(self._on_pixel_hovered)
+
+    def _on_pixel_hovered(self, x: int, y: int, r: int, g: int, b: int, a: int):
+        self._pixel_label.setText(f"({x}, {y})  R:{r} G:{g} B:{b} A:{a}")
 
     def _sync_scrollbars(self):
         """Update scrollbar ranges and values to match current canvas viewport."""

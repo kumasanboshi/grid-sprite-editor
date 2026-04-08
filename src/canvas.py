@@ -21,6 +21,7 @@ class SpriteCanvas(QWidget):
     image_changed = pyqtSignal()
     file_dropped = pyqtSignal(str)
     viewport_changed = pyqtSignal()  # emits on zoom or pan
+    pixel_hovered = pyqtSignal(int, int, int, int, int, int)  # x, y, r, g, b, a
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -284,6 +285,12 @@ class SpriteCanvas(QWidget):
     def mouseMoveEvent(self, event: QMouseEvent):
         image_pos = self.widget_to_image(QPointF(event.position()))
 
+        if self.image:
+            x, y = int(image_pos.x()), int(image_pos.y())
+            if 0 <= x < self.image.width and 0 <= y < self.image.height:
+                r, g, b, a = self.image.getpixel((x, y))
+                self.pixel_hovered.emit(x, y, r, g, b, a)
+
         if self._pan_start:
             delta = QPointF(event.position()) - self._pan_start
             self._offset = self._pan_offset_start + delta
@@ -437,6 +444,32 @@ class SpriteCanvas(QWidget):
             self.image.alpha_composite(flipped, dest=(x, y))
         else:
             self.image = self.image.transpose(Image.FLIP_LEFT_RIGHT)
+        self.refresh_pixmap()
+        self.image_changed.emit()
+        self.update()
+
+    # ------------------------------------------------------------------
+    # trim_transparency
+    # ------------------------------------------------------------------
+    def trim_transparency(self):
+        """Trim transparent margins from the whole image (bounding box of non-transparent pixels)."""
+        if not self.image:
+            return
+        img = self.image.convert("RGBA")
+        # alpha > 10 のピクセルだけをコンテンツとみなす（薄いグロー等を無視）
+        alpha = img.getchannel("A").point(lambda a: 255 if a > 10 else 0)
+        bbox = alpha.getbbox()
+        if bbox is None:
+            return  # 全体が透明
+        x0, y0, x1, y1 = bbox
+        w, h = x1 - x0, y1 - y0
+        side = max(w, h)
+        # 長辺に合わせて正方形になるよう中央揃えで拡張
+        cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
+        half = side // 2
+        sq_bbox = (cx - half, cy - half, cx - half + side, cy - half + side)
+        self.history.push(self.image)
+        self.image = img.crop(sq_bbox)
         self.refresh_pixmap()
         self.image_changed.emit()
         self.update()
