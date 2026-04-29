@@ -1,6 +1,6 @@
 """
 resize_tool.py
-画像を 128x128 / 256x256 にリサイズするドラッグ&ドロップツール。
+画像を 128x128 / 256x256 / 1536x1536 にリサイズするドラッグ&ドロップツール。
 使い方: python resize_tool.py
 """
 import sys
@@ -13,7 +13,7 @@ from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 from PIL import Image
 
 
-SIZES = [128, 256]
+SIZES = [128, 256, 1536]
 
 
 class DropArea(QWidget):
